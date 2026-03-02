@@ -1,3 +1,19 @@
+# 6.0.2
+
+### @hakit/components
+
+- BUGIX - spacing issue for ButtonCard when has no content - fixes [issue](https://github.com/shannonhochkins/ha-component-kit/issues/307)
+- FEATURE - Introducing "tooltipsWhenClosed" prop, which is now enabled by default to display an indicator of what a button does in collapsed state
+
+
+### @hakit/core
+
+- BUGFIX - HassConnect suspend/resume now resolves even when browsers skip `visibilitychange` after long tab freezes (added `pageshow` fallback + visibility polling), preventing stuck reconnections with error code 3 - solves [issue](https://github.com/shannonhochkins/ha-component-kit/issues/304)
+
+### General
+
+- BUGFIX - rimraf added to ensure scripts work in different OS's
+
 # 6.0.1
 
 ### General

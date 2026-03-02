@@ -57,6 +57,11 @@ export function handleSuspendResume(connection: Connection, options: HandleSuspe
    * Prevents stacking multiple promises.
    */
   let isSuspended = false;
+  /**
+   * Fallback interval to detect when the page becomes visible again in cases where
+   * visibilitychange/focus/resume events are not delivered after a long tab freeze.
+   */
+  let visibilityPollId: number | null = null;
 
   if (connection.connected) {
     if (debug) console.log("[SR] Connection is already active → handleSuspendResume will manage suspension");
@@ -88,6 +93,7 @@ export function handleSuspendResume(connection: Connection, options: HandleSuspe
         if (debug) console.log("[SR] pendingResolve() called → lifting suspension");
         isSuspended = false;
         pendingResolve = null;
+        stopVisibilityPolling();
         resolve();
         onStatusChange?.("connected");
       };
@@ -107,6 +113,7 @@ export function handleSuspendResume(connection: Connection, options: HandleSuspe
             if (document.hidden) {
               if (debug) console.log("[SR] Hidden timeout elapsed → calling suspend()");
               suspend();
+              startVisibilityPolling();
             } else {
               // User returned before timeout. Resolve immediately.
               if (pendingResolve) {
@@ -119,7 +126,7 @@ export function handleSuspendResume(connection: Connection, options: HandleSuspe
         : null;
 
     // If the user focuses before DELAY_MS is up, resume immediately:
-    if (typeof window !== "undefined") window.addEventListener("focus", onVisibleOrResume, { once: true });
+    if (typeof window !== "undefined") window.addEventListener("focus", onVisibleOrResume);
   }
 
   // helper when page/tab becomes visible or “resume” fires after freeze
@@ -139,6 +146,7 @@ export function handleSuspendResume(connection: Connection, options: HandleSuspe
       // resets isSuspended and pendingResolve itself
       pendingResolve();
     }
+    stopVisibilityPolling();
   }
 
   // helpers for the event listeners to attach
@@ -157,6 +165,29 @@ export function handleSuspendResume(connection: Connection, options: HandleSuspe
     onVisibleOrResume();
   }
 
+  function pageShowHandler() {
+    if (debug) console.log("[SR] pageshow event fired");
+    onVisibleOrResume();
+  }
+
+  function startVisibilityPolling() {
+    if (visibilityPollId !== null) return;
+    if (typeof window === "undefined") return;
+    visibilityPollId = window.setInterval(() => {
+      if (!document.hidden) {
+        if (debug) console.log("[SR] visibility polling detected VISIBLE");
+        onVisibleOrResume();
+      }
+    }, 2_000);
+  }
+
+  function stopVisibilityPolling() {
+    if (visibilityPollId !== null && typeof window !== "undefined") {
+      clearInterval(visibilityPollId);
+      visibilityPollId = null;
+    }
+  }
+
   function suspend() {
     if (!connection.connected) {
       if (debug) console.log("[SR] Connection already suspended → skipping suspend()");
@@ -172,6 +203,7 @@ export function handleSuspendResume(connection: Connection, options: HandleSuspe
   document.addEventListener("visibilitychange", visibilityChangeHandler, false);
   document.addEventListener("freeze", suspend);
   document.addEventListener("resume", resumeHandler);
+  document.addEventListener("pageshow", pageShowHandler);
 
   if (debug) console.log("[SR] handleSuspendResume() initialized; debugging is ON");
 
@@ -182,6 +214,7 @@ export function handleSuspendResume(connection: Connection, options: HandleSuspe
     document.removeEventListener("visibilitychange", visibilityChangeHandler, false);
     document.removeEventListener("freeze", suspend);
     document.removeEventListener("resume", resumeHandler);
+    document.removeEventListener("pageshow", pageShowHandler);
     if (typeof window !== "undefined") window.removeEventListener("focus", onVisibleOrResume);
 
     if (hiddenTimeoutId !== null) {
@@ -189,6 +222,7 @@ export function handleSuspendResume(connection: Connection, options: HandleSuspe
       clearTimeout(hiddenTimeoutId);
       hiddenTimeoutId = null;
     }
+    stopVisibilityPolling();
     // If there’s still a pendingResolve (Promise not resolved), resolve it now so reconnection can recover:
     if (pendingResolve) {
       if (debug) console.log("[SR] cleanup: Resolving pendingResolve() to let reconnection proceed");
