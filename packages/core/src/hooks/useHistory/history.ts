@@ -164,6 +164,7 @@ class HistoryStream {
         // only expire the rest of the history as it ages.
         const lastExpiredState = expiredStates[expiredStates.length - 1];
         lastExpiredState.lu = purgeBeforePythonTime;
+        delete lastExpiredState.lc;
         newHistory[entityId].unshift(lastExpiredState);
       }
     }
@@ -352,32 +353,27 @@ export const computeHistory = (
       currentState || isNumericFromDomain(domain) ? undefined : stateInfo.find((state) => state.a && isNumericFromAttributes(state.a));
 
     const isNumeric = isNumericEntity(domain, currentState, numericStateFromHistory, sensorNumericalDeviceClasses, forceNumeric);
-
     let unit: string | undefined;
-
     if (isNumeric) {
       unit = currentState?.attributes.unit_of_measurement || numericStateFromHistory?.a.unit_of_measurement || BLANK_UNIT;
     } else {
-      if (domain === "zone") {
-        unit = localize("people_in_zone");
-      } else if (domain === "climate" || domain === "water_heater") {
-        unit = config?.unit_system.temperature;
-      } else if (domain === "humidifier") {
-        unit = "%";
-      }
+      unit = {
+        zone: localize("unit"),
+        climate: config?.unit_system.temperature,
+        humidifier: "%",
+        water_heater: config?.unit_system.temperature,
+      }[domain as keyof typeof specialDomainClasses];
     }
 
-    let deviceClassSpecial: string | undefined;
+    const specialDomainClasses = {
+      climate: "temperature",
+      humidifier: "humidity",
+      water_heater: "temperature",
+    };
 
-    if (domain === "climate") {
-      deviceClassSpecial = "temperature";
-    } else if (domain === "humidifier") {
-      deviceClassSpecial = "humidity";
-    } else if (domain === "water_heater") {
-      deviceClassSpecial = "temperature";
-    }
-
-    const deviceClass: string | undefined = deviceClassSpecial || (currentState?.attributes || numericStateFromHistory?.a)?.device_class;
+    const deviceClass: string | undefined =
+      specialDomainClasses[domain as keyof typeof specialDomainClasses] ||
+      (currentState?.attributes || numericStateFromHistory?.a)?.device_class;
 
     const key = computeGroupKey(unit, deviceClass, splitDeviceClasses);
 
