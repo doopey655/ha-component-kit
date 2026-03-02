@@ -322,8 +322,8 @@ function InternalButtonCard<E extends EntityName>({
             style={
               isDefaultLayout || children
                 ? {
-                  marginBottom: "20px",
-                }
+                    marginBottom: "20px",
+                  }
                 : undefined
             }
           >
