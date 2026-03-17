@@ -125,9 +125,15 @@ export interface ClimateControlSliderProps {
   entity: FilterByDomain<EntityName, "climate">;
   showCurrent?: boolean;
   targetTempStep?: number;
+  showCurrentAsMainTemperatue?: boolean;
 }
 
-export function ClimateControlSlider({ entity: _entity, targetTempStep, showCurrent = false }: ClimateControlSliderProps) {
+export function ClimateControlSlider({
+  entity: _entity,
+  targetTempStep,
+  showCurrent = false,
+  showCurrentAsMainTemperatue = false,
+}: ClimateControlSliderProps) {
   const [_targetTemperature, setTargetTemperature] = useState<Partial<Record<Target, number>>>({});
   const [_selectTargetTemperature, setSelectTargetTemperature] = useState<Target>("low");
   const entity = useEntity(_entity);
@@ -215,8 +221,12 @@ export function ClimateControlSlider({ entity: _entity, targetTempStep, showCurr
 
     const actionLabel = toReadableString(entity.attributes.hvac_action);
 
-    return <p className="label">{action && action !== "off" && action !== "idle" ? actionLabel : localize("target_temperature")}</p>;
-  }, [entity.attributes.hvac_action, entity.state, supportsTargetTemperature, supportsTargetTemperatureRange]);
+    if (!showCurrentAsMainTemperatue) {
+      return <p className="label">{action && action !== "off" && action !== "idle" ? actionLabel : localize("target_temperature")}</p>;
+    } else {
+      return <p className="label">{localize("current_temperature")}</p>;
+    }
+  }, [entity.attributes.hvac_action, entity.state, supportsTargetTemperature, supportsTargetTemperatureRange, showCurrentAsMainTemperatue]);
 
   const _valueChanged = useCallback(
     (value: number, target: Target) => {
@@ -347,8 +357,8 @@ export function ClimateControlSlider({ entity: _entity, targetTempStep, showCurr
           />
           <div className="info">
             {_renderLabel()}
-            {_renderTargetTemperature(_targetTemperature.value)}
-            {_renderCurrentTemperature(entity.attributes.current_temperature)}
+            {_renderTargetTemperature(!showCurrentAsMainTemperatue ? _targetTemperature.value : entity.attributes.current_temperature)}
+            {_renderCurrentTemperature(!showCurrentAsMainTemperatue ? entity.attributes.current_temperature : _targetTemperature.value)}
           </div>
           {_renderTemperatureButtons("value")}
         </div>
