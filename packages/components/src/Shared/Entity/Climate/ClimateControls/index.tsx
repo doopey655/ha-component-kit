@@ -63,6 +63,8 @@ export interface ClimateControlsProps extends Omit<React.ComponentPropsWithoutRe
   mainControl?: MainControl;
   /** The custom step increment for the climate entity, this is automatically retrieved from the entity */
   targetTempStep?: number;
+
+  showCurrentAsMainTemperatue?: boolean;
 }
 
 function InternalClimateControls({
@@ -78,6 +80,7 @@ function InternalClimateControls({
   cssStyles,
   className,
   targetTempStep,
+  showCurrentAsMainTemperatue,
   mainControl = "temperature",
   ...rest
 }: ClimateControlsProps) {
@@ -170,7 +173,12 @@ function InternalClimateControls({
     >
       <div className="controls">
         {_mainControl === "temperature" ? (
-          <ClimateControlSlider targetTempStep={_step} entity={_entity} showCurrent={!hideCurrentTemperature} />
+          <ClimateControlSlider
+            targetTempStep={_step}
+            entity={_entity}
+            showCurrent={!hideCurrentTemperature}
+            showCurrentAsMainTemperatue={showCurrentAsMainTemperatue}
+          />
         ) : null}
         {_mainControl === "humidity" ? (
           <ClimateHumiditySlider targetTempStep={_step} entity={_entity} showCurrent={!hideCurrentTemperature} />
