@@ -64,6 +64,8 @@ export interface CoverControlsProps {
   orientation?: Orientation;
   /** reverse the direction of the slider, useful if you want the ui to reflect the actual cover, the UI will not change, but the actions will reverse, open becomes close, just changes the order */
   reverse?: boolean;
+  /** override the button size used when mode is set to button */
+  buttonSize?: number;
 }
 
 function InternalCoverControls({
@@ -72,6 +74,7 @@ function InternalCoverControls({
   orientation = "vertical",
   reverse = false,
   onStateChange,
+  buttonSize,
 }: CoverControlsProps) {
   const entity = useEntity(_entity);
   const isUnavailable = isUnavailableState(entity.state);
@@ -95,6 +98,8 @@ function InternalCoverControls({
   const titleValue = useMemo(() => {
     return computeTitleDisplay(entity);
   }, [entity]);
+  const buttonThickness = buttonSize ?? (device.xxs ? 80 : 96);
+  const buttonGroupMinLength = `calc(${buttonThickness}px * 3 + 2rem)`;
 
   useEffect(() => {
     if (supportsPosition && mode === "position") {
@@ -196,14 +201,14 @@ function InternalCoverControls({
               {supportsOpenClose && (
                 <Column>
                   <ButtonGroup
-                    thickness={device.xxs ? 80 : 96}
+                    thickness={buttonThickness}
                     reverse={reverse}
                     orientation={orientation}
                     style={{
-                      minHeight: orientation === "vertical" ? "200px" : undefined,
+                      minHeight: orientation === "vertical" ? buttonGroupMinLength : undefined,
                       maxHeight: orientation === "vertical" ? "320px" : undefined,
                       height: orientation === "vertical" ? "45vh" : undefined,
-                      minWidth: orientation === "horizontal" ? "320px" : undefined,
+                      minWidth: orientation === "horizontal" ? buttonGroupMinLength : undefined,
                       maxWidth: orientation === "horizontal" ? "420px" : undefined,
                       flexWrap: "nowrap",
                     }}
@@ -233,14 +238,14 @@ function InternalCoverControls({
               {supportsTilt && (
                 <Column>
                   <ButtonGroup
-                    thickness={device.xxs ? 80 : 96}
+                    thickness={buttonThickness}
                     reverse={reverse}
                     orientation={orientation}
                     style={{
-                      minHeight: orientation === "vertical" ? "200px" : undefined,
+                      minHeight: orientation === "vertical" ? buttonGroupMinLength : undefined,
                       maxHeight: orientation === "vertical" ? "320px" : undefined,
                       height: orientation === "vertical" ? "45vh" : undefined,
-                      minWidth: orientation === "horizontal" ? "320px" : undefined,
+                      minWidth: orientation === "horizontal" ? buttonGroupMinLength : undefined,
                       maxWidth: orientation === "horizontal" ? "420px" : undefined,
                       flexWrap: "nowrap",
                     }}
