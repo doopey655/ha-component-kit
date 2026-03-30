@@ -1,7 +1,7 @@
 import { useMemo, useEffect, useCallback, useState } from "react";
 import styled from "@emotion/styled";
-import { ControlSlider, Column, Row, FabCard, useBreakpoint, fallback, ButtonGroup, ButtonGroupButton } from "@components";
-import { useEntity, supportsFeatureFromAttributes, isUnavailableState, localize } from "@hakit/core";
+import { ControlSlider, Column, Row, useBreakpoint, fallback, ButtonGroup, ButtonGroupButton } from "@components";
+import { useEntity, supportsFeatureFromAttributes, isUnavailableState, localize, useIcon } from "@hakit/core";
 import type { EntityName, CoverEntity, FilterByDomain } from "@hakit/core";
 import { ErrorBoundary } from "react-error-boundary";
 
@@ -16,19 +16,58 @@ const enum CoverEntityFeature {
   SET_TILT_POSITION = 128,
 }
 
-const ButtonBar = styled.div`
-  position: relative;
+const CompactLayout = styled.div`
   display: flex;
-  flex-direction: row;
+  width: 100%;
   align-items: center;
-  height: 56px;
-  border-radius: 28px;
-  background-color: rgba(120, 120, 120, 0.1);
-  box-sizing: border-box;
-  width: auto;
-  padding: 4px;
-  gap: 4px;
-  margin-top: 24px;
+  gap: 0.75rem;
+`;
+
+const CompactContent = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const ModeToggleButton = styled.button<{
+  size: number;
+}>`
+  width: ${(props) => props.size}px;
+  height: ${(props) => props.size}px;
+  min-width: ${(props) => props.size}px;
+  min-height: ${(props) => props.size}px;
+  outline: none;
+  cursor: pointer;
+  border: 0;
+  border-radius: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--ha-S300);
+  color: var(--ha-S500-contrast);
+  transition: var(--ha-transition-duration) var(--ha-easing);
+  transition-property: transform, background-color, color, box-shadow, opacity;
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
+
+  &:hover:not(:disabled) {
+    background-color: var(--ha-S400);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.9);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
 `;
 
 const Label = styled.span`
@@ -51,6 +90,16 @@ function computeTitleDisplay(entity: CoverEntity, position?: number) {
     return `${position === 0 ? "closed" : position === 100 ? "open" : entity.state}${suffix ? ` - ${suffix}%` : ""}`;
   }
   return `${entity.state}${suffix ? ` - ${suffix}%` : ""}`;
+}
+
+function mapCoverPositionForDisplay(position: number, reverse: boolean, isCompactHorizontal: boolean) {
+  if (!isCompactHorizontal || !reverse) return position;
+  return 100 - position;
+}
+
+function mapCoverPositionForService(position: number, reverse: boolean, isCompactHorizontal: boolean) {
+  if (!isCompactHorizontal || !reverse) return position;
+  return 100 - position;
 }
 
 type Mode = "position" | "button";
@@ -86,34 +135,136 @@ function InternalCoverControls({
   );
   const supportsPosition = supports(CoverEntityFeature.SET_POSITION);
   const supportsTiltPosition = supports(CoverEntityFeature.SET_TILT_POSITION);
+  const supportsSliderMode = supportsPosition || supportsTiltPosition;
 
   const supportsOpenClose = supports(CoverEntityFeature.OPEN) || supports(CoverEntityFeature.CLOSE) || supports(CoverEntityFeature.STOP);
 
   const supportsTilt =
     supports(CoverEntityFeature.OPEN_TILT) || supports(CoverEntityFeature.CLOSE_TILT) || supports(CoverEntityFeature.STOP_TILT);
 
-  const [_mode, setMode] = useState<Mode>((mode ?? supportsPosition) ? "position" : "button");
+  const [_mode, setMode] = useState<Mode>(supportsSliderMode && mode === "position" ? "position" : "button");
 
   const device = useBreakpoint();
   const titleValue = useMemo(() => {
     return computeTitleDisplay(entity);
   }, [entity]);
+  const isCompactHorizontal = orientation === "horizontal";
+  const isCompactHorizontalSmall = isCompactHorizontal && device.xxs;
   const buttonThickness = buttonSize ?? (device.xxs ? 80 : 96);
-  const buttonGroupMinLength = `calc(${buttonThickness}px * 3 + 2rem)`;
+  const buttonGap = isCompactHorizontal ? "0.625rem" : "1rem";
+  const buttonGroupMinLength = `calc(${buttonThickness}px * 3 + (${buttonGap} * 2))`;
+  const sliderThickness = isCompactHorizontal ? buttonThickness : device.xxs ? 90 : 100;
+  const sliderBorderRadius = isCompactHorizontal ? 6 : 24;
+  const modeToggleSize = isCompactHorizontalSmall ? Math.max(34, Math.round(buttonThickness * 0.7)) : isCompactHorizontal ? Math.max(38, Math.round(buttonThickness * 0.66)) : 44;
+  const compactGap = isCompactHorizontalSmall ? "0.5rem" : "0.75rem";
+  const toggleModeIcon = useIcon(_mode === "button" ? "mdi:gesture-tap-button" : "mdi:tune-vertical", {
+    width: "18px",
+    height: "18px",
+  });
+  const toggleModeTitle = _mode === "button" ? localize("button") : localize("position");
 
   useEffect(() => {
-    if (supportsPosition && mode === "position") {
-      setMode(mode);
-    } else {
-      setMode("button");
+    if (supportsSliderMode && mode === "position") {
+      setMode("position");
+      return;
     }
-  }, [mode, supportsPosition]);
+    setMode("button");
+  }, [mode, supportsSliderMode]);
 
   useEffect(() => {
     if (onStateChange) {
       onStateChange(titleValue);
     }
   }, [titleValue, onStateChange]);
+
+  const renderModeToggle = () => {
+    if (!supportsSliderMode) return null;
+    return (
+      <ModeToggleButton
+        type="button"
+        size={modeToggleSize}
+        title={toggleModeTitle}
+        aria-label={toggleModeTitle}
+        onClick={() => {
+          setMode((currentMode) => (currentMode === "button" ? "position" : "button"));
+        }}
+      >
+        {toggleModeIcon}
+      </ModeToggleButton>
+    );
+  };
+
+  const renderPositionSlider = (position: number, label: string, onApply: (value: number) => void) => {
+    const displayValue = mapCoverPositionForDisplay(position, reverse, isCompactHorizontal);
+    return (
+      <Column>
+        <ControlSlider
+          sliderColor={isUnavailable ? undefined : `var(--ha-A400)`}
+          min={0}
+          max={100}
+          mode={isCompactHorizontal ? "start" : reverse ? "end" : "start"}
+          vertical={orientation === "vertical"}
+          thickness={sliderThickness}
+          borderRadius={sliderBorderRadius}
+          value={displayValue}
+          showHandle={!isCompactHorizontal}
+          disabled={isUnavailable}
+          style={
+            isCompactHorizontal
+              ? {
+                  minWidth: isCompactHorizontalSmall ? 0 : buttonGroupMinLength,
+                  maxWidth: isCompactHorizontalSmall ? "100%" : buttonGroupMinLength,
+                  width: isCompactHorizontalSmall ? "100%" : buttonGroupMinLength,
+                }
+              : undefined
+          }
+          onChange={(value) => {
+            const serviceValue = mapCoverPositionForService(value, reverse, isCompactHorizontal);
+            if (onStateChange) onStateChange(computeTitleDisplay(entity, Math.round(serviceValue)));
+          }}
+          onChangeApplied={(value) => {
+            onApply(mapCoverPositionForService(value, reverse, isCompactHorizontal));
+            if (onStateChange) onStateChange(computeTitleDisplay(entity, Math.round(mapCoverPositionForService(value, reverse, isCompactHorizontal))));
+          }}
+        />
+        {!isCompactHorizontal && <Label>{label}</Label>}
+      </Column>
+    );
+  };
+
+  const renderButtonGroup = (
+    buttons: Array<{
+      title: string;
+      service: "openCover" | "stopCover" | "closeCover" | "openCoverTilt" | "stopCoverTilt" | "closeCoverTilt";
+      icon: string;
+    }>,
+    label: string,
+  ) => {
+    return (
+      <Column>
+        <ButtonGroup
+          thickness={buttonThickness}
+          reverse={reverse}
+          orientation={orientation}
+          gap={buttonGap}
+          style={{
+            minHeight: orientation === "vertical" ? buttonGroupMinLength : undefined,
+            maxHeight: orientation === "vertical" ? "320px" : undefined,
+            height: orientation === "vertical" ? "45vh" : undefined,
+            minWidth: orientation === "horizontal" ? (isCompactHorizontalSmall ? 0 : buttonGroupMinLength) : undefined,
+            maxWidth: orientation === "horizontal" ? (isCompactHorizontalSmall ? "100%" : buttonGroupMinLength) : undefined,
+            width: orientation === "horizontal" ? (isCompactHorizontalSmall ? "100%" : buttonGroupMinLength) : undefined,
+            flexWrap: "nowrap",
+          }}
+        >
+          {buttons.map((button) => (
+            <ButtonGroupButton key={button.service} title={button.title} entity={_entity} service={button.service} icon={button.icon} />
+          ))}
+        </ButtonGroup>
+        {!isCompactHorizontal && <Label>{label}</Label>}
+      </Column>
+    );
+  };
 
   return (
     <Column
@@ -125,175 +276,195 @@ function InternalCoverControls({
       }}
     >
       <Column>
-        {_mode === "position" && (
-          <>
-            <Row
-              gap="1rem"
-              style={{
-                flexDirection: orientation === "vertical" ? "row" : "column",
-              }}
+        {isCompactHorizontal ? (
+          <CompactLayout
+            style={{
+              gap: compactGap,
+            }}
+          >
+            <CompactContent
+              style={
+                isCompactHorizontalSmall
+                  ? {
+                      flex: "0 1 calc(75% - 0.25rem)",
+                      maxWidth: "calc(75% - 0.25rem)",
+                      minWidth: 0,
+                    }
+                  : undefined
+              }
             >
-              {supportsPosition && typeof entity.attributes.current_position !== "undefined" && (
-                <Column>
-                  <ControlSlider
-                    sliderColor={isUnavailable ? undefined : `var(--ha-A400)`}
-                    min={0}
-                    max={100}
-                    mode={reverse ? "end" : "start"}
-                    vertical={orientation === "vertical"}
-                    thickness={device.xxs ? 90 : 100}
-                    borderRadius={24}
-                    value={entity.attributes.current_position}
-                    disabled={isUnavailable}
-                    onChange={(value) => {
-                      if (onStateChange) onStateChange(computeTitleDisplay(entity, Math.round(value)));
-                    }}
-                    onChangeApplied={(value) => {
+              {_mode === "position" && (
+                <>
+                  {supportsPosition &&
+                    typeof entity.attributes.current_position !== "undefined" &&
+                    renderPositionSlider(entity.attributes.current_position, localize("cover_position"), (value) => {
                       entity.service.setCoverPosition({
                         serviceData: {
                           position: value,
                         },
                       });
-                      if (onStateChange) onStateChange(computeTitleDisplay(entity, Math.round(value)));
-                    }}
-                  />
-                  <Label>{localize("cover_position")}</Label>
-                </Column>
-              )}
-              {supportsTiltPosition && typeof entity.attributes.current_tilt_position !== "undefined" && (
-                <Column>
-                  <ControlSlider
-                    sliderColor={isUnavailable ? undefined : `var(--ha-A400)`}
-                    min={0}
-                    max={100}
-                    mode={reverse ? "end" : "start"}
-                    vertical={orientation === "vertical"}
-                    thickness={device.xxs ? 90 : 100}
-                    borderRadius={24}
-                    value={entity.attributes.current_tilt_position}
-                    disabled={isUnavailable}
-                    onChange={(value) => {
-                      if (onStateChange) onStateChange(computeTitleDisplay(entity, Math.round(value)));
-                    }}
-                    onChangeApplied={(value) => {
+                    })}
+                  {supportsTiltPosition &&
+                    typeof entity.attributes.current_tilt_position !== "undefined" &&
+                    renderPositionSlider(entity.attributes.current_tilt_position, localize("cover_tilt_position"), (value) => {
                       entity.service.setCoverTiltPosition({
                         serviceData: {
                           tilt_position: value,
                         },
                       });
-                      if (onStateChange) onStateChange(computeTitleDisplay(entity, Math.round(value)));
-                    }}
-                  />
-                  <Label>{localize("cover_tilt_position")}</Label>
-                </Column>
+                    })}
+                </>
               )}
-            </Row>
-          </>
-        )}
-        {_mode === "button" && (
-          <>
-            <Row
-              gap="1rem"
-              style={{
-                flexDirection: orientation === "vertical" ? "row" : "column",
-              }}
+              {_mode === "button" && (
+                <>
+                  {supportsOpenClose &&
+                    renderButtonGroup(
+                      [
+                        {
+                          title: localize("open_cover"),
+                          service: "openCover",
+                          icon: reverse ? "mdi:arrow-down" : "mdi:arrow-up",
+                        },
+                        {
+                          title: localize("stop_cover"),
+                          service: "stopCover",
+                          icon: "mdi:stop",
+                        },
+                        {
+                          title: localize("close_cover"),
+                          service: "closeCover",
+                          icon: !reverse ? "mdi:arrow-down" : "mdi:arrow-up",
+                        },
+                      ],
+                      localize("control"),
+                    )}
+                  {supportsTilt &&
+                    renderButtonGroup(
+                      [
+                        {
+                          title: localize("open_cover_tilt"),
+                          service: "openCoverTilt",
+                          icon: reverse ? "mdi:arrow-collapse" : "mdi:arrow-expand",
+                        },
+                        {
+                          title: localize("stops_a_tilting_cover_movement"),
+                          service: "stopCoverTilt",
+                          icon: "mdi:stop",
+                        },
+                        {
+                          title: localize("close_cover_tilt"),
+                          service: "closeCoverTilt",
+                          icon: !reverse ? "mdi:arrow-collapse" : "mdi:arrow-expand",
+                        },
+                      ],
+                      localize("tilt_position"),
+                    )}
+                </>
+              )}
+            </CompactContent>
+            <div
+              style={
+                isCompactHorizontalSmall
+                  ? {
+                      flex: "0 0 calc(25% - 0.25rem)",
+                      maxWidth: "calc(25% - 0.25rem)",
+                      minWidth: `${Math.max(36, Math.round(buttonThickness * 0.55))}px`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }
+                  : undefined
+              }
             >
-              {supportsOpenClose && (
-                <Column>
-                  <ButtonGroup
-                    thickness={buttonThickness}
-                    reverse={reverse}
-                    orientation={orientation}
-                    style={{
-                      minHeight: orientation === "vertical" ? buttonGroupMinLength : undefined,
-                      maxHeight: orientation === "vertical" ? "320px" : undefined,
-                      height: orientation === "vertical" ? "45vh" : undefined,
-                      minWidth: orientation === "horizontal" ? buttonGroupMinLength : undefined,
-                      maxWidth: orientation === "horizontal" ? "420px" : undefined,
-                      flexWrap: "nowrap",
-                    }}
-                  >
-                    <ButtonGroupButton
-                      title={localize("open_cover")}
-                      entity={_entity}
-                      service="openCover"
-                      icon={reverse ? "mdi:arrow-down" : "mdi:arrow-up"}
-                    />
-                    <ButtonGroupButton
-                      title={localize("stop_cover")}
-                      entity={_entity}
-                      service="stopCover"
-                      icon={"mdi:stop-circle-outline"}
-                    />
-                    <ButtonGroupButton
-                      title={localize("close_cover")}
-                      entity={_entity}
-                      service="closeCover"
-                      icon={!reverse ? "mdi:arrow-down" : "mdi:arrow-up"}
-                    />
-                  </ButtonGroup>
-                  <Label>{localize("control")}</Label>
-                </Column>
-              )}
-              {supportsTilt && (
-                <Column>
-                  <ButtonGroup
-                    thickness={buttonThickness}
-                    reverse={reverse}
-                    orientation={orientation}
-                    style={{
-                      minHeight: orientation === "vertical" ? buttonGroupMinLength : undefined,
-                      maxHeight: orientation === "vertical" ? "320px" : undefined,
-                      height: orientation === "vertical" ? "45vh" : undefined,
-                      minWidth: orientation === "horizontal" ? buttonGroupMinLength : undefined,
-                      maxWidth: orientation === "horizontal" ? "420px" : undefined,
-                      flexWrap: "nowrap",
-                    }}
-                  >
-                    <ButtonGroupButton
-                      title={localize("open_cover_tilt")}
-                      entity={_entity}
-                      service="openCoverTilt"
-                      icon={reverse ? "mdi:arrow-collapse" : "mdi:arrow-expand"}
-                    />
-                    <ButtonGroupButton
-                      title={localize("stops_a_tilting_cover_movement")}
-                      entity={_entity}
-                      service="stopCoverTilt"
-                      icon={"mdi:stop-circle-outline"}
-                    />
-                    <ButtonGroupButton
-                      title={localize("close_cover_tilt")}
-                      entity={_entity}
-                      service="closeCoverTilt"
-                      icon={!reverse ? "mdi:arrow-collapse" : "mdi:arrow-expand"}
-                    />
-                  </ButtonGroup>
-                  <Label>{localize("tilt_position")}</Label>
-                </Column>
-              )}
-            </Row>
+              {renderModeToggle()}
+            </div>
+          </CompactLayout>
+        ) : (
+          <>
+            {_mode === "position" && (
+              <>
+                <Row
+                  gap="1rem"
+                  style={{
+                    flexDirection: orientation === "vertical" ? "row" : "column",
+                  }}
+                >
+                  {supportsPosition &&
+                    typeof entity.attributes.current_position !== "undefined" &&
+                    renderPositionSlider(entity.attributes.current_position, localize("cover_position"), (value) => {
+                      entity.service.setCoverPosition({
+                        serviceData: {
+                          position: value,
+                        },
+                      });
+                    })}
+                  {supportsTiltPosition &&
+                    typeof entity.attributes.current_tilt_position !== "undefined" &&
+                    renderPositionSlider(entity.attributes.current_tilt_position, localize("cover_tilt_position"), (value) => {
+                      entity.service.setCoverTiltPosition({
+                        serviceData: {
+                          tilt_position: value,
+                        },
+                      });
+                    })}
+                </Row>
+              </>
+            )}
+            {_mode === "button" && (
+              <>
+                <Row
+                  gap="1rem"
+                  style={{
+                    flexDirection: orientation === "vertical" ? "row" : "column",
+                  }}
+                >
+                  {supportsOpenClose &&
+                    renderButtonGroup(
+                      [
+                        {
+                          title: localize("open_cover"),
+                          service: "openCover",
+                          icon: reverse ? "mdi:arrow-down" : "mdi:arrow-up",
+                        },
+                        {
+                          title: localize("stop_cover"),
+                          service: "stopCover",
+                          icon: "mdi:stop-circle-outline",
+                        },
+                        {
+                          title: localize("close_cover"),
+                          service: "closeCover",
+                          icon: !reverse ? "mdi:arrow-down" : "mdi:arrow-up",
+                        },
+                      ],
+                      localize("control"),
+                    )}
+                  {supportsTilt &&
+                    renderButtonGroup(
+                      [
+                        {
+                          title: localize("open_cover_tilt"),
+                          service: "openCoverTilt",
+                          icon: reverse ? "mdi:arrow-collapse" : "mdi:arrow-expand",
+                        },
+                        {
+                          title: localize("stops_a_tilting_cover_movement"),
+                          service: "stopCoverTilt",
+                          icon: "mdi:stop-circle-outline",
+                        },
+                        {
+                          title: localize("close_cover_tilt"),
+                          service: "closeCoverTilt",
+                          icon: !reverse ? "mdi:arrow-collapse" : "mdi:arrow-expand",
+                        },
+                      ],
+                      localize("tilt_position"),
+                    )}
+                </Row>
+              </>
+            )}
+            {renderModeToggle()}
           </>
-        )}
-        {(supportsTilt || supportsPosition) && (
-          <ButtonBar>
-            <FabCard
-              icon="mdi:hamburger-menu"
-              active={_mode === "position"}
-              title={localize("position")}
-              onClick={() => {
-                setMode("position");
-              }}
-            />
-            <FabCard
-              icon="mdi:swap-vertical"
-              active={_mode === "button"}
-              title={localize("button")}
-              onClick={() => {
-                setMode("button");
-              }}
-            />
-          </ButtonBar>
         )}
       </Column>
     </Column>
