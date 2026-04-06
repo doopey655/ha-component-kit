@@ -165,6 +165,22 @@ export function handleSuspendResume(connection: Connection, options: HandleSuspe
     onVisibleOrResume();
   }
 
+  function freezeHandler() {
+    if (debug) console.log("[SR] freeze event fired");
+    onHidden();
+
+    if (hiddenTimeoutId !== null) {
+      clearTimeout(hiddenTimeoutId);
+      hiddenTimeoutId = null;
+    }
+
+    if (document.hidden) {
+      if (debug) console.log("[SR] Freeze detected while hidden → suspending immediately");
+      suspend();
+      startVisibilityPolling();
+    }
+  }
+
   function pageShowHandler() {
     if (debug) console.log("[SR] pageshow event fired");
     onVisibleOrResume();
@@ -195,13 +211,12 @@ export function handleSuspendResume(connection: Connection, options: HandleSuspe
     }
     onStatusChange?.("suspended");
     if (debug) console.log("[SR] suspend() called → suspending connection");
-    if (typeof window !== "undefined") window.stop();
     connection.suspend();
   }
 
   // wire in event handlers
   document.addEventListener("visibilitychange", visibilityChangeHandler, false);
-  document.addEventListener("freeze", suspend);
+  document.addEventListener("freeze", freezeHandler);
   document.addEventListener("resume", resumeHandler);
   document.addEventListener("pageshow", pageShowHandler);
 
@@ -212,7 +227,7 @@ export function handleSuspendResume(connection: Connection, options: HandleSuspe
     if (debug) console.log("[SR] cleanup() called → removing listeners & clearing timeouts");
 
     document.removeEventListener("visibilitychange", visibilityChangeHandler, false);
-    document.removeEventListener("freeze", suspend);
+    document.removeEventListener("freeze", freezeHandler);
     document.removeEventListener("resume", resumeHandler);
     document.removeEventListener("pageshow", pageShowHandler);
     if (typeof window !== "undefined") window.removeEventListener("focus", onVisibleOrResume);
